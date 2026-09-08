@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IoT Remote Patient Monitor</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        .connection-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            font-size: 0.95rem;
+            color: #555;
+        }
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #95a5a6;
+            display: inline-block;
+        }
+        .dot.online { background-color: #2ecc71; }
+        .dot.warning { background-color: #e67e22; }
+
+        /* Finger Detection Warning Banner */
+        #finger-banner {
+            display: none;
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+            border-radius: 8px;
+            padding: 12px 20px;
+            margin-bottom: 20px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            max-width: 900px;
+            width: 100%;
+            box-sizing: border-box;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            animation: pulse 2s infinite ease-in-out;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 0.9; }
+            50% { opacity: 1; transform: scale(1.01); }
+        }
+
+        .vitals-container {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+            width: 100%;
+            max-width: 900px;
+        }
+        .vital-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            flex: 1;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.08);
+            text-align: center;
+            transition: transform 0.2s ease;
+        }
+        .vital-card:hover {
+            transform: translateY(-2px);
+        }
+        .vital-card h2 {
+            margin: 0 0 10px 0;
+            color: #7f8c8d;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        .vital-value {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .vital-unit {
+            font-size: 1.1rem;
+            color: #95a5a6;
+            margin-left: 4px;
+        }
+        .status-indicator {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: white;
+            margin-top: 12px;
+            display: inline-block;
+        }
+        .status-normal { background-color: #2ecc71; }
+        .status-warning { background-color: #e74c3c; }
+        .status-idle { background-color: #bdc3c7; color: #555; }
+        .chart-container {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            width: 100%;
+            max-width: 900px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.08);
+            margin-bottom: 20px;
+            box-sizing: border-box;
+        }
+        .footer-note {
+            font-size: 0.85rem;
+            color: #7f8c8d;
+            margin-top: 10px;
+        }
+    </style>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+</head>
+<body>
+
+    <h1>Remote Patient Monitor</h1>
+    <div class="connection-bar">
+        <span id="connection-dot" class="dot"></span>
+        <span id="connection-status">Connecting to live cloud stream...</span>
+    </div>
+
+    <!-- Active Finger Detection Banner -->
+    <div id="finger-banner">
+        ⚠️ NO FINGER DETECTED — Please place your finger lightly and steadily on the MAX30102 sensor.
+    </div>
+
+    <div class="vitals-container">
+        <!-- Heart Rate Card -->
+        <div class="vital-card">
+            <h2>Heart Rate</h2>
+            <div>
+                <span class="vital-value" id="bpm-val">--</span>
+                <span class="vital-unit">BPM</span>
+            </div>
+            <div id="bpm-status" class="status-indicator status-idle">Waiting</div>
+        </div>
+
+        <!-- SpO2 Card -->
+        <div class="vital-card">
+            <h2>SpO2 (Oxygen)</h2>
+            <div>
+                <span class="vital-value" id="spo2-val">--</span>
+                <span class="vital-unit">%</span>
+            </div>
+            <div id="spo2-status" class="status-indicator status-idle">Waiting</div>
+        </div>
+
+        <!-- Respiration Rate Card -->
+        <div class="vital-card">
+            <h2>Respiration Rate</h2>
+            <div>
+                <span class="vital-value" id="resp-val">--</span>
+                <span class="vital-unit">BrPM</span>
+            </div>
+            <div id="resp-status" class="status-indicator status-idle">Waiting</div>
+        </div>
+    </div>
+
+    <div class="chart-container">
+        <canvas id="vitalsChart"></canvas>
+    </div>
+
+    <div class="footer-note">
+        Updated every 10 seconds. Resting adult nominal ranges: Heart Rate 60–100 BPM, SpO2 &gt; 95%, Respiration Rate 12–20 BrPM.
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
