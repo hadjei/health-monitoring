@@ -424,8 +424,26 @@
                 font-size: 0.8rem;
                 margin-top: 3px;
             }
+            .print-waveform-section {
+                margin: 16px 0;
+                page-break-inside: avoid;
+            }
+            .print-waveform-wrapper {
+                background: #090d16;
+                border-radius: 6px;
+                border: 1px solid #94a3b8;
+                overflow: hidden;
+                box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+            }
+            .print-waveform-img {
+                width: 100%;
+                height: auto;
+                max-height: 140px;
+                display: block;
+                object-fit: cover;
+            }
             .print-footer {
-                margin-top: 30px;
+                margin-top: 25px;
                 border-top: 1px solid #cbd5e1;
                 padding-top: 10px;
                 display: flex;

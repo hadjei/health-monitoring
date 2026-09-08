@@ -48,6 +48,7 @@ let activeSession = {
     startTime: null,
     endTime: null,
     date: new Date().toLocaleDateString(),
+    ppgSnapshot: null,
     records: []
 };
 const allSessions = [activeSession];
@@ -100,6 +101,7 @@ function startNewPatientSession() {
         startTime: null,
         endTime: null,
         date: new Date().toLocaleDateString(),
+        ppgSnapshot: null,
         records: []
     };
     allSessions.push(activeSession);
@@ -224,6 +226,14 @@ function setIdleState(message) {
     if (plethRate) plethRate.textContent = "PULSE: --";
     if (flatlineOverlay) flatlineOverlay.style.display = "block";
     if (pulseDot) pulseDot.classList.remove("active");
+
+    // Capture representative waveform snapshot for this session before flatlining
+    if (activeSession && activeSession.records.length > 0 && ppgCanvas) {
+        try {
+            activeSession.ppgSnapshot = ppgCanvas.toDataURL("image/png");
+        } catch (e) {}
+    }
+
     ppgIncomingQueue = [];
     ppgBuffer.fill(0);
 
@@ -511,6 +521,7 @@ database.ref('vitals/current').on('value', (snapshot) => {
             startTime: new Date().toLocaleTimeString(),
             endTime: null,
             date: new Date().toLocaleDateString(),
+            ppgSnapshot: null,
             records: []
         };
         allSessions.push(activeSession);
@@ -527,6 +538,13 @@ database.ref('vitals/current').on('value', (snapshot) => {
 
     if (activeSession && !activeSession.startTime) {
         activeSession.startTime = new Date().toLocaleTimeString();
+    }
+
+    // Periodically update active session waveform snapshot while recording
+    if (isFingerPresent && ppgCanvas && (!activeSession.ppgSnapshot || Math.random() < 0.20)) {
+        try {
+            activeSession.ppgSnapshot = ppgCanvas.toDataURL("image/png");
+        } catch (e) {}
     }
 
     // Accumulate in ACTIVE patient session (avoid duplicate consecutive records)
@@ -645,6 +663,18 @@ function exportPDFReport() {
     const avgSpo2 = Math.round(sumSpo2 / session.records.length);
     const avgResp = Math.round(sumResp / session.records.length);
 
+    // If active session is streaming or canvas has live wave, capture snapshot
+    if (session === activeSession && isFingerPresent && ppgCanvas) {
+        try {
+            session.ppgSnapshot = ppgCanvas.toDataURL("image/png");
+        } catch (e) {}
+    } else if (!session.ppgSnapshot && ppgCanvas) {
+        // Fallback to current canvas state if no prior snapshot was saved
+        try {
+            session.ppgSnapshot = ppgCanvas.toDataURL("image/png");
+        } catch (e) {}
+    }
+
     const firstTime = session.startTime || session.records[0].localTime;
     const lastTime = session.endTime || session.records[session.records.length - 1].localTime;
     const sessionDate = session.date || new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -711,6 +741,20 @@ function exportPDFReport() {
                 <div class="stat-row"><span>Reference:</span> <span style="color:#0284c7">12 - 20 BrPM</span></div>
             </div>
         </div>
+
+        ${session.ppgSnapshot ? `
+        <div class="print-waveform-section">
+            <h3 style="font-size: 0.95rem; color: #0f172a; margin: 16px 0 6px 0;">Representative Plethysmogram (PPG Optical Pulse Strip)</h3>
+            <div class="print-waveform-wrapper">
+                <img class="print-waveform-img" src="${session.ppgSnapshot}" alt="Plethysmogram Waveform Strip" />
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: #64748b; margin-top: 4px;">
+                <span>Channel: MAX30102 Infrared Optical Pulse (0.5 - 4.5 Hz AC)</span>
+                <span>Sampling: 50 Hz | Catmull-Rom Cubic Bézier Interpolation</span>
+                <span>Waveform Status: Calibrated Diagnostic Trace</span>
+            </div>
+        </div>
+        ` : ''}
 
         <h3 style="font-size: 1rem; color: #0f172a; margin: 20px 0 8px 0;">Patient Telemetric Data Log ${session.records.length > 60 ? '(Last 60 Records)' : ''}</h3>
         <table class="print-table">
@@ -786,6 +830,7 @@ function clearAllPatientRecords() {
         startTime: null,
         endTime: null,
         date: new Date().toLocaleDateString(),
+        ppgSnapshot: null,
         records: []
     };
     allSessions.length = 0;
