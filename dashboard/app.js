@@ -36,9 +36,83 @@ const btnExportCSV = document.getElementById('btn-export-csv');
 const btnExportPDF = document.getElementById('btn-export-pdf');
 const logCountBadge = document.getElementById('log-count-badge');
 const printableReport = document.getElementById('printable-report');
+const sessionSelect = document.getElementById('session-select');
+const btnNewSession = document.getElementById('btn-new-session');
 
-// In-Memory Telemetry Session History
-const telemetryHistory = [];
+// Patient Session Management (Isolates telemetry per individual patient)
+let sessionCounter = 1;
+let activeSession = {
+    id: 1,
+    name: "Patient Session #1",
+    startTime: null,
+    endTime: null,
+    date: new Date().toLocaleDateString(),
+    records: []
+};
+const allSessions = [activeSession];
+let sessionConcludedOnFingerLift = false;
+
+function getSelectedSession() {
+    if (!sessionSelect) return activeSession;
+    const selectedId = parseInt(sessionSelect.value, 10);
+    return allSessions.find(s => s.id === selectedId) || activeSession || allSessions[allSessions.length - 1];
+}
+
+function updateBadgeForSelectedSession() {
+    const s = getSelectedSession();
+    if (!logCountBadge || !s) return;
+    const count = s.records.length;
+    logCountBadge.textContent = `${count} record${count === 1 ? '' : 's'}`;
+}
+
+function updateSessionDropdown() {
+    if (!sessionSelect) return;
+    const currentSelectedId = parseInt(sessionSelect.value, 10);
+    sessionSelect.innerHTML = "";
+
+    allSessions.forEach(session => {
+        const opt = document.createElement("option");
+        opt.value = session.id;
+        const isActive = (activeSession && session.id === activeSession.id);
+        const count = session.records.length;
+        const timeInfo = session.startTime ? ` (${session.startTime}${session.endTime ? ' - ' + session.endTime : ''})` : '';
+        opt.textContent = `${session.name}${isActive ? ' (Active)' : ' (Saved)'} - ${count} records${timeInfo}`;
+        sessionSelect.appendChild(opt);
+    });
+
+    if (activeSession) {
+        sessionSelect.value = activeSession.id;
+    } else if (allSessions.length > 0) {
+        sessionSelect.value = allSessions[allSessions.length - 1].id;
+    }
+    updateBadgeForSelectedSession();
+}
+
+function startNewPatientSession() {
+    if (activeSession && activeSession.records.length > 0 && !activeSession.endTime) {
+        activeSession.endTime = new Date().toLocaleTimeString();
+    }
+    sessionCounter++;
+    activeSession = {
+        id: sessionCounter,
+        name: `Patient Session #${sessionCounter}`,
+        startTime: null,
+        endTime: null,
+        date: new Date().toLocaleDateString(),
+        records: []
+    };
+    allSessions.push(activeSession);
+    sessionConcludedOnFingerLift = false;
+
+    // Reset chart for new patient
+    vitalsChart.data.labels = [];
+    vitalsChart.data.datasets[0].data = [];
+    vitalsChart.data.datasets[1].data = [];
+    vitalsChart.data.datasets[2].data = [];
+    vitalsChart.update();
+
+    updateSessionDropdown();
+}
 
 // Plethysmogram Waveform Buffer & Interpolation Queue
 const WAVE_BUFFER_SIZE = 220; // Number of display points across canvas width
@@ -151,6 +225,15 @@ function setIdleState(message) {
     if (pulseDot) pulseDot.classList.remove("active");
     ppgIncomingQueue = [];
     ppgBuffer.fill(0);
+
+    // If active session was recording, conclude it upon finger removal
+    if (activeSession && activeSession.records.length > 0) {
+        if (!activeSession.endTime) {
+            activeSession.endTime = new Date().toLocaleTimeString();
+        }
+        sessionConcludedOnFingerLift = true;
+        updateSessionDropdown();
+    }
 }
 
 function evaluateVitals(bpm, spo2, resp) {
@@ -417,12 +500,41 @@ database.ref('vitals/current').on('value', (snapshot) => {
 
     vitalsChart.update();
 
-    // Accumulate in telemetry session history (avoid duplicate consecutive records)
+    // Check if we need to start a new session for a new person (because previous finger was removed)
+    if (sessionConcludedOnFingerLift) {
+        sessionConcludedOnFingerLift = false;
+        sessionCounter++;
+        activeSession = {
+            id: sessionCounter,
+            name: `Patient Session #${sessionCounter}`,
+            startTime: new Date().toLocaleTimeString(),
+            endTime: null,
+            date: new Date().toLocaleDateString(),
+            records: []
+        };
+        allSessions.push(activeSession);
+
+        // Clear previous patient's trend lines from the chart for fresh patient view
+        vitalsChart.data.labels = [];
+        vitalsChart.data.datasets[0].data = [];
+        vitalsChart.data.datasets[1].data = [];
+        vitalsChart.data.datasets[2].data = [];
+        vitalsChart.update();
+
+        updateSessionDropdown();
+    }
+
+    if (activeSession && !activeSession.startTime) {
+        activeSession.startTime = new Date().toLocaleTimeString();
+    }
+
+    // Accumulate in ACTIVE patient session (avoid duplicate consecutive records)
     const nowEpoch = data.timestamp ? Math.round(data.timestamp) : Math.round(Date.now() / 1000);
-    const lastRecord = telemetryHistory[telemetryHistory.length - 1];
+    const sessionRecords = activeSession.records;
+    const lastRecord = sessionRecords[sessionRecords.length - 1];
     if (!lastRecord || lastRecord.epoch !== nowEpoch || lastRecord.bpm !== bpm || lastRecord.spo2 !== spo2) {
-        telemetryHistory.push({
-            id: telemetryHistory.length + 1,
+        sessionRecords.push({
+            id: sessionRecords.length + 1,
             epoch: nowEpoch,
             isoTime: new Date(nowEpoch * 1000).toISOString(),
             localTime: new Date(nowEpoch * 1000).toLocaleTimeString(),
@@ -433,9 +545,8 @@ database.ref('vitals/current').on('value', (snapshot) => {
             statusSpO2: spo2 < 93 ? "Low Oxygen" : "Normal",
             statusRR: resp < 10 ? "Bradypnea" : resp > 24 ? "Tachypnea" : "Normal"
         });
-        if (logCountBadge) {
-            logCountBadge.textContent = `${telemetryHistory.length} record${telemetryHistory.length === 1 ? '' : 's'} logged`;
-        }
+        updateSessionDropdown();
+        updateBadgeForSelectedSession();
     }
 }, (error) => {
     connectionDot.className = "dot";
@@ -443,11 +554,12 @@ database.ref('vitals/current').on('value', (snapshot) => {
 });
 
 // ----------------------------------------------------
-// Telemetry Data Export Handlers (CSV & Printable PDF)
+// Telemetry Data Export Handlers (Per-Patient Session)
 // ----------------------------------------------------
 function exportCSV() {
-    if (telemetryHistory.length === 0) {
-        alert("No clinical telemetry records have been logged yet. Please allow the sensor to stream readings.");
+    const session = getSelectedSession();
+    if (!session || session.records.length === 0) {
+        alert("No clinical telemetry records have been logged for this patient session yet.");
         return;
     }
 
@@ -463,9 +575,18 @@ function exportCSV() {
         "Respiration Evaluation"
     ];
 
-    const csvRows = [headers.join(",")];
+    const meta = [
+        `"Session","${session.name}"`,
+        `"Session Date","${session.date || new Date().toLocaleDateString()}"`,
+        `"Start Time","${session.startTime || '--'}"`,
+        `"End Time","${session.endTime || 'Active'}"`,
+        `"Total Session Samples",${session.records.length}`,
+        ""
+    ];
 
-    for (const r of telemetryHistory) {
+    const csvRows = [...meta, headers.join(",")];
+
+    for (const r of session.records) {
         const row = [
             r.id,
             `"${r.isoTime}"`,
@@ -483,9 +604,10 @@ function exportCSV() {
     const csvBlob = new Blob([csvRows.join("\r\n")], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(csvBlob);
     const a = document.createElement("a");
-    const nowStr = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const safeName = session.name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+    const dateStr = new Date().toISOString().slice(0, 10);
     a.href = url;
-    a.download = `patient_telemetry_report_${nowStr}.csv`;
+    a.download = `${safeName}_vitals_${dateStr}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -493,17 +615,18 @@ function exportCSV() {
 }
 
 function exportPDFReport() {
-    if (telemetryHistory.length === 0) {
-        alert("No clinical telemetry records have been logged yet. Please allow the sensor to stream readings.");
+    const session = getSelectedSession();
+    if (!session || session.records.length === 0) {
+        alert("No clinical telemetry records have been logged for this patient session yet.");
         return;
     }
 
-    // Compute Summary Statistics
+    // Compute Summary Statistics ONLY for this individual patient session
     let sumBpm = 0, minBpm = Infinity, maxBpm = -Infinity;
     let sumSpo2 = 0, minSpo2 = Infinity, maxSpo2 = -Infinity;
     let sumResp = 0, minResp = Infinity, maxResp = -Infinity;
 
-    for (const r of telemetryHistory) {
+    for (const r of session.records) {
         sumBpm += r.bpm;
         if (r.bpm < minBpm) minBpm = r.bpm;
         if (r.bpm > maxBpm) maxBpm = r.bpm;
@@ -517,17 +640,17 @@ function exportPDFReport() {
         if (r.respiration > maxResp) maxResp = r.respiration;
     }
 
-    const avgBpm = Math.round(sumBpm / telemetryHistory.length);
-    const avgSpo2 = Math.round(sumSpo2 / telemetryHistory.length);
-    const avgResp = Math.round(sumResp / telemetryHistory.length);
+    const avgBpm = Math.round(sumBpm / session.records.length);
+    const avgSpo2 = Math.round(sumSpo2 / session.records.length);
+    const avgResp = Math.round(sumResp / session.records.length);
 
-    const firstTime = telemetryHistory[0].localTime;
-    const lastTime = telemetryHistory[telemetryHistory.length - 1].localTime;
-    const dateFormatted = new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    const firstTime = session.startTime || session.records[0].localTime;
+    const lastTime = session.endTime || session.records[session.records.length - 1].localTime;
+    const sessionDate = session.date || new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
     let rowsHtml = "";
-    // Display up to the last 50 entries to keep print sheet compact and clean
-    const displayEntries = telemetryHistory.slice(-50);
+    // Display all or up to 60 records for the patient
+    const displayEntries = session.records.slice(-60);
     for (const r of displayEntries) {
         rowsHtml += `
             <tr>
@@ -544,7 +667,7 @@ function exportPDFReport() {
         <div class="print-header">
             <div>
                 <h1>Hospital Remote Patient Monitoring System</h1>
-                <div class="subtitle">CLINICAL TELEMETRY & PHYSIOLOGICAL VITAL SIGNS REPORT</div>
+                <div class="subtitle">INDIVIDUAL PATIENT TELEMETRY REPORT — ${session.name.toUpperCase()}</div>
             </div>
             <div style="text-align: right; font-size: 0.8rem; color: #64748b;">
                 <div><strong>CONFIDENTIAL MEDICAL RECORD</strong></div>
@@ -554,16 +677,16 @@ function exportPDFReport() {
 
         <div class="print-meta-grid">
             <div class="print-meta-item">
-                <div><strong>Date:</strong> ${dateFormatted}</div>
-                <div><strong>Monitoring Session:</strong> Active Cloud Telemetry</div>
+                <div><strong>Patient Identifier:</strong> ${session.name}</div>
+                <div><strong>Session Date:</strong> ${sessionDate}</div>
             </div>
             <div class="print-meta-item">
-                <div><strong>Session Time Range:</strong> ${firstTime} - ${lastTime}</div>
+                <div><strong>Recording Window:</strong> ${firstTime} - ${lastTime}</div>
                 <div><strong>Device:</strong> ESP32 MAX30102 Optical PPG</div>
             </div>
             <div class="print-meta-item">
-                <div><strong>Total Samples:</strong> ${telemetryHistory.length} records</div>
-                <div><strong>Telemetry Status:</strong> Calibrated / Steady</div>
+                <div><strong>Session Samples:</strong> ${session.records.length} records</div>
+                <div><strong>Status:</strong> ${session.endTime ? 'Completed' : 'In Progress'}</div>
             </div>
         </div>
 
@@ -588,7 +711,7 @@ function exportPDFReport() {
             </div>
         </div>
 
-        <h3 style="font-size: 1rem; color: #0f172a; margin: 20px 0 8px 0;">Telemetric Data Log ${telemetryHistory.length > 50 ? '(Last 50 Records)' : ''}</h3>
+        <h3 style="font-size: 1rem; color: #0f172a; margin: 20px 0 8px 0;">Patient Telemetric Data Log ${session.records.length > 60 ? '(Last 60 Records)' : ''}</h3>
         <table class="print-table">
             <thead>
                 <tr>
@@ -623,4 +746,20 @@ if (btnExportCSV) {
 }
 if (btnExportPDF) {
     btnExportPDF.addEventListener('click', exportPDFReport);
+}
+if (sessionSelect) {
+    sessionSelect.addEventListener('change', () => {
+        updateBadgeForSelectedSession();
+        const s = getSelectedSession();
+        if (s && s.records.length > 0) {
+            vitalsChart.data.labels = s.records.map(r => r.localTime);
+            vitalsChart.data.datasets[0].data = s.records.map(r => r.bpm);
+            vitalsChart.data.datasets[1].data = s.records.map(r => r.spo2);
+            vitalsChart.data.datasets[2].data = s.records.map(r => r.respiration);
+            vitalsChart.update();
+        }
+    });
+}
+if (btnNewSession) {
+    btnNewSession.addEventListener('click', startNewPatientSession);
 }
