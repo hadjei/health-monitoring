@@ -34,6 +34,7 @@ const flatlineOverlay = document.getElementById('flatline-overlay');
 // Telemetry Session & Export Elements
 const btnExportCSV = document.getElementById('btn-export-csv');
 const btnExportPDF = document.getElementById('btn-export-pdf');
+const btnClearRecords = document.getElementById('btn-clear-records');
 const logCountBadge = document.getElementById('log-count-badge');
 const printableReport = document.getElementById('printable-report');
 const sessionSelect = document.getElementById('session-select');
@@ -747,6 +748,9 @@ if (btnExportCSV) {
 if (btnExportPDF) {
     btnExportPDF.addEventListener('click', exportPDFReport);
 }
+if (btnClearRecords) {
+    btnClearRecords.addEventListener('click', clearAllPatientRecords);
+}
 if (sessionSelect) {
     sessionSelect.addEventListener('change', () => {
         updateBadgeForSelectedSession();
@@ -762,4 +766,45 @@ if (sessionSelect) {
 }
 if (btnNewSession) {
     btnNewSession.addEventListener('click', startNewPatientSession);
+}
+
+function clearAllPatientRecords() {
+    const totalRecords = allSessions.reduce((acc, s) => acc + s.records.length, 0);
+    if (totalRecords === 0) {
+        alert("There are no patient records to clear.");
+        return;
+    }
+
+    const confirmed = confirm(`Are you sure you want to clear all ${totalRecords} patient records across ${allSessions.length} session(s)? This action cannot be undone.`);
+    if (!confirmed) return;
+
+    // Reset session counter and sessions list
+    sessionCounter = 1;
+    activeSession = {
+        id: 1,
+        name: "Patient Session #1",
+        startTime: null,
+        endTime: null,
+        date: new Date().toLocaleDateString(),
+        records: []
+    };
+    allSessions.length = 0;
+    allSessions.push(activeSession);
+    sessionConcludedOnFingerLift = false;
+
+    // Reset trend chart
+    vitalsChart.data.labels = [];
+    vitalsChart.data.datasets[0].data = [];
+    vitalsChart.data.datasets[1].data = [];
+    vitalsChart.data.datasets[2].data = [];
+    vitalsChart.update();
+
+    // Clear printable report if rendered
+    if (printableReport) {
+        printableReport.innerHTML = "";
+    }
+
+    // Refresh UI dropdown & badge
+    updateSessionDropdown();
+    updateBadgeForSelectedSession();
 }
