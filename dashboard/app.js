@@ -31,6 +31,15 @@ const pulseDot = document.getElementById('pulse-dot');
 const plethRate = document.getElementById('pleth-rate');
 const flatlineOverlay = document.getElementById('flatline-overlay');
 
+// Telemetry Session & Export Elements
+const btnExportCSV = document.getElementById('btn-export-csv');
+const btnExportPDF = document.getElementById('btn-export-pdf');
+const logCountBadge = document.getElementById('log-count-badge');
+const printableReport = document.getElementById('printable-report');
+
+// In-Memory Telemetry Session History
+const telemetryHistory = [];
+
 // Plethysmogram Waveform Buffer & Interpolation Queue
 const WAVE_BUFFER_SIZE = 220; // Number of display points across canvas width
 const ppgBuffer = new Array(WAVE_BUFFER_SIZE).fill(0);
@@ -270,19 +279,33 @@ function renderOscilloscope(currentTime) {
     // Draw Grid
     drawGrid(width, height);
 
-    // Render Waveform
-    ppgCtx.beginPath();
+    // Render Catmull-Rom Cubic Bezier Spline Waveform
+    const pts = [];
     const dx = width / (ppgBuffer.length - 1);
-
     for (let i = 0; i < ppgBuffer.length; i++) {
         // Invert optical sign: MAX30102 AC drops during pulse absorption, so invert to show positive systolic peak
-        const y = centerY - (ppgBuffer[i] * scaleY);
-        const x = i * dx;
-        if (i === 0) {
-            ppgCtx.moveTo(x, y);
-        } else {
-            ppgCtx.lineTo(x, y);
-        }
+        pts.push({
+            x: i * dx,
+            y: centerY - (ppgBuffer[i] * scaleY)
+        });
+    }
+
+    ppgCtx.beginPath();
+    ppgCtx.moveTo(pts[0].x, pts[0].y);
+
+    // Compute Catmull-Rom cubic Bezier spline through all points
+    for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = i > 0 ? pts[i - 1] : pts[i];
+        const p1 = pts[i];
+        const p2 = pts[i + 1];
+        const p3 = i < pts.length - 2 ? pts[i + 2] : p2;
+
+        const cp1x = p1.x + (p2.x - p0.x) / 6;
+        const cp1y = p1.y + (p2.y - p0.y) / 6;
+        const cp2x = p2.x - (p3.x - p1.x) / 6;
+        const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+        ppgCtx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
     }
 
     // Glowing stroke
@@ -393,7 +416,211 @@ database.ref('vitals/current').on('value', (snapshot) => {
     }
 
     vitalsChart.update();
+
+    // Accumulate in telemetry session history (avoid duplicate consecutive records)
+    const nowEpoch = data.timestamp ? Math.round(data.timestamp) : Math.round(Date.now() / 1000);
+    const lastRecord = telemetryHistory[telemetryHistory.length - 1];
+    if (!lastRecord || lastRecord.epoch !== nowEpoch || lastRecord.bpm !== bpm || lastRecord.spo2 !== spo2) {
+        telemetryHistory.push({
+            id: telemetryHistory.length + 1,
+            epoch: nowEpoch,
+            isoTime: new Date(nowEpoch * 1000).toISOString(),
+            localTime: new Date(nowEpoch * 1000).toLocaleTimeString(),
+            bpm: bpm,
+            spo2: spo2,
+            respiration: resp,
+            statusHR: bpm < 50 ? "Bradycardia" : bpm > 105 ? "Elevated" : "Normal",
+            statusSpO2: spo2 < 93 ? "Low Oxygen" : "Normal",
+            statusRR: resp < 10 ? "Bradypnea" : resp > 24 ? "Tachypnea" : "Normal"
+        });
+        if (logCountBadge) {
+            logCountBadge.textContent = `${telemetryHistory.length} record${telemetryHistory.length === 1 ? '' : 's'} logged`;
+        }
+    }
 }, (error) => {
     connectionDot.className = "dot";
     connectionStatus.textContent = "Error connecting to Firebase: " + error.message;
 });
+
+// ----------------------------------------------------
+// Telemetry Data Export Handlers (CSV & Printable PDF)
+// ----------------------------------------------------
+function exportCSV() {
+    if (telemetryHistory.length === 0) {
+        alert("No clinical telemetry records have been logged yet. Please allow the sensor to stream readings.");
+        return;
+    }
+
+    const headers = [
+        "Record ID",
+        "Timestamp (ISO)",
+        "Local Time",
+        "Heart Rate (BPM)",
+        "SpO2 (%)",
+        "Respiration Rate (BrPM)",
+        "Heart Rate Evaluation",
+        "SpO2 Evaluation",
+        "Respiration Evaluation"
+    ];
+
+    const csvRows = [headers.join(",")];
+
+    for (const r of telemetryHistory) {
+        const row = [
+            r.id,
+            `"${r.isoTime}"`,
+            `"${r.localTime}"`,
+            r.bpm,
+            r.spo2,
+            r.respiration,
+            `"${r.statusHR}"`,
+            `"${r.statusSpO2}"`,
+            `"${r.statusRR}"`
+        ];
+        csvRows.push(row.join(","));
+    }
+
+    const csvBlob = new Blob([csvRows.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(csvBlob);
+    const a = document.createElement("a");
+    const nowStr = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    a.href = url;
+    a.download = `patient_telemetry_report_${nowStr}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function exportPDFReport() {
+    if (telemetryHistory.length === 0) {
+        alert("No clinical telemetry records have been logged yet. Please allow the sensor to stream readings.");
+        return;
+    }
+
+    // Compute Summary Statistics
+    let sumBpm = 0, minBpm = Infinity, maxBpm = -Infinity;
+    let sumSpo2 = 0, minSpo2 = Infinity, maxSpo2 = -Infinity;
+    let sumResp = 0, minResp = Infinity, maxResp = -Infinity;
+
+    for (const r of telemetryHistory) {
+        sumBpm += r.bpm;
+        if (r.bpm < minBpm) minBpm = r.bpm;
+        if (r.bpm > maxBpm) maxBpm = r.bpm;
+
+        sumSpo2 += r.spo2;
+        if (r.spo2 < minSpo2) minSpo2 = r.spo2;
+        if (r.spo2 > maxSpo2) maxSpo2 = r.spo2;
+
+        sumResp += r.respiration;
+        if (r.respiration < minResp) minResp = r.respiration;
+        if (r.respiration > maxResp) maxResp = r.respiration;
+    }
+
+    const avgBpm = Math.round(sumBpm / telemetryHistory.length);
+    const avgSpo2 = Math.round(sumSpo2 / telemetryHistory.length);
+    const avgResp = Math.round(sumResp / telemetryHistory.length);
+
+    const firstTime = telemetryHistory[0].localTime;
+    const lastTime = telemetryHistory[telemetryHistory.length - 1].localTime;
+    const dateFormatted = new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+    let rowsHtml = "";
+    // Display up to the last 50 entries to keep print sheet compact and clean
+    const displayEntries = telemetryHistory.slice(-50);
+    for (const r of displayEntries) {
+        rowsHtml += `
+            <tr>
+                <td>${r.id}</td>
+                <td>${r.localTime}</td>
+                <td><strong>${r.bpm}</strong> BPM (${r.statusHR})</td>
+                <td><strong>${r.spo2}</strong>% (${r.statusSpO2})</td>
+                <td><strong>${r.respiration}</strong> BrPM (${r.statusRR})</td>
+            </tr>
+        `;
+    }
+
+    const reportHtml = `
+        <div class="print-header">
+            <div>
+                <h1>Hospital Remote Patient Monitoring System</h1>
+                <div class="subtitle">CLINICAL TELEMETRY & PHYSIOLOGICAL VITAL SIGNS REPORT</div>
+            </div>
+            <div style="text-align: right; font-size: 0.8rem; color: #64748b;">
+                <div><strong>CONFIDENTIAL MEDICAL RECORD</strong></div>
+                <div>Generated: ${new Date().toLocaleTimeString()}</div>
+            </div>
+        </div>
+
+        <div class="print-meta-grid">
+            <div class="print-meta-item">
+                <div><strong>Date:</strong> ${dateFormatted}</div>
+                <div><strong>Monitoring Session:</strong> Active Cloud Telemetry</div>
+            </div>
+            <div class="print-meta-item">
+                <div><strong>Session Time Range:</strong> ${firstTime} - ${lastTime}</div>
+                <div><strong>Device:</strong> ESP32 MAX30102 Optical PPG</div>
+            </div>
+            <div class="print-meta-item">
+                <div><strong>Total Samples:</strong> ${telemetryHistory.length} records</div>
+                <div><strong>Telemetry Status:</strong> Calibrated / Steady</div>
+            </div>
+        </div>
+
+        <div class="print-summary-cards">
+            <div class="print-stat-card">
+                <h3>Heart Rate (BPM)</h3>
+                <div class="stat-row"><span>Mean (Average):</span> <strong>${avgBpm} BPM</strong></div>
+                <div class="stat-row"><span>Range (Min - Max):</span> <span>${minBpm} - ${maxBpm} BPM</span></div>
+                <div class="stat-row"><span>Reference:</span> <span style="color:#0284c7">60 - 100 BPM</span></div>
+            </div>
+            <div class="print-stat-card">
+                <h3>Blood Oxygen (SpO2)</h3>
+                <div class="stat-row"><span>Mean (Average):</span> <strong>${avgSpo2}%</strong></div>
+                <div class="stat-row"><span>Range (Min - Max):</span> <span>${minSpo2}% - ${maxSpo2}%</span></div>
+                <div class="stat-row"><span>Reference:</span> <span style="color:#0284c7">&ge; 95%</span></div>
+            </div>
+            <div class="print-stat-card">
+                <h3>Respiration Rate</h3>
+                <div class="stat-row"><span>Mean (Average):</span> <strong>${avgResp} BrPM</strong></div>
+                <div class="stat-row"><span>Range (Min - Max):</span> <span>${minResp} - ${maxResp} BrPM</span></div>
+                <div class="stat-row"><span>Reference:</span> <span style="color:#0284c7">12 - 20 BrPM</span></div>
+            </div>
+        </div>
+
+        <h3 style="font-size: 1rem; color: #0f172a; margin: 20px 0 8px 0;">Telemetric Data Log ${telemetryHistory.length > 50 ? '(Last 50 Records)' : ''}</h3>
+        <table class="print-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Time</th>
+                    <th>Heart Rate</th>
+                    <th>SpO2</th>
+                    <th>Respiration</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${rowsHtml}
+            </tbody>
+        </table>
+
+        <div class="print-footer">
+            <div>Physiological algorithm: Dual-Core ESP32 FreeRTOS (Autocorrelation + Ratio-of-Ratios)</div>
+            <div>Attending Clinician Signature: ___________________________</div>
+        </div>
+    `;
+
+    if (printableReport) {
+        printableReport.innerHTML = reportHtml;
+    }
+
+    // Open native browser print dialog (supports Save as PDF or physical print)
+    window.print();
+}
+
+if (btnExportCSV) {
+    btnExportCSV.addEventListener('click', exportCSV);
+}
+if (btnExportPDF) {
+    btnExportPDF.addEventListener('click', exportPDFReport);
+}

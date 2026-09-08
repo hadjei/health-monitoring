@@ -209,6 +209,178 @@
             border: 1px solid rgba(239, 68, 68, 0.4);
             display: none;
         }
+
+        /* Telemetry Toolbar & Action Buttons */
+        .telemetry-toolbar {
+            max-width: 900px;
+            margin: 25px auto 10px auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .toolbar-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #334155;
+            letter-spacing: 0.5px;
+        }
+        .log-count-badge {
+            background: #e2e8f0;
+            color: #475569;
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+        .toolbar-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .btn-action {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+        .btn-action svg {
+            stroke: currentColor;
+        }
+        .btn-csv {
+            background: #0ea5e9;
+            color: #ffffff;
+        }
+        .btn-csv:hover {
+            background: #0284c7;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(14, 165, 233, 0.25);
+        }
+        .btn-pdf {
+            background: #0f172a;
+            color: #ffffff;
+        }
+        .btn-pdf:hover {
+            background: #1e293b;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(15, 23, 42, 0.25);
+        }
+        .btn-action:active {
+            transform: translateY(0);
+        }
+
+        /* Printable Telemetry Report */
+        #printable-report {
+            display: none;
+        }
+
+        @media print {
+            body {
+                background: #ffffff !important;
+                color: #000000 !important;
+                margin: 0 !important;
+                padding: 15mm !important;
+            }
+            body > *:not(#printable-report) {
+                display: none !important;
+            }
+            #printable-report {
+                display: block !important;
+                width: 100% !important;
+                background: #ffffff !important;
+                color: #111827 !important;
+                font-family: Arial, Helvetica, sans-serif !important;
+            }
+            .print-header {
+                border-bottom: 2px solid #0f172a;
+                padding-bottom: 12px;
+                margin-bottom: 20px;
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+            }
+            .print-header h1 {
+                margin: 0 0 4px 0;
+                font-size: 1.5rem;
+                color: #0f172a;
+            }
+            .print-header .subtitle {
+                font-size: 0.85rem;
+                color: #64748b;
+            }
+            .print-meta-grid {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 12px;
+                background: #f8fafc;
+                padding: 12px;
+                border-radius: 6px;
+                border: 1px solid #e2e8f0;
+                margin-bottom: 20px;
+                font-size: 0.85rem;
+            }
+            .print-meta-item strong {
+                color: #334155;
+            }
+            .print-table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 15px;
+                font-size: 0.85rem;
+            }
+            .print-table th, .print-table td {
+                border: 1px solid #cbd5e1;
+                padding: 8px 10px;
+                text-align: left;
+            }
+            .print-table th {
+                background-color: #f1f5f9;
+                font-weight: 700;
+                color: #0f172a;
+            }
+            .print-summary-cards {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 15px;
+                margin-bottom: 20px;
+            }
+            .print-stat-card {
+                border: 1px solid #cbd5e1;
+                border-radius: 6px;
+                padding: 10px;
+                background: #f8fafc;
+            }
+            .print-stat-card h3 {
+                margin: 0 0 6px 0;
+                font-size: 0.9rem;
+                color: #334155;
+            }
+            .print-stat-card .stat-row {
+                display: flex;
+                justify-content: space-between;
+                font-size: 0.8rem;
+                margin-top: 3px;
+            }
+            .print-footer {
+                margin-top: 30px;
+                border-top: 1px solid #cbd5e1;
+                padding-top: 10px;
+                display: flex;
+                justify-content: space-between;
+                font-size: 0.75rem;
+                color: #64748b;
+            }
+        }
     </style>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -279,6 +451,25 @@
         </div>
     </div>
 
+    <!-- Telemetry Controls & Data Export Toolbar -->
+    <div class="telemetry-toolbar">
+        <div class="toolbar-title">
+            <span>📈</span>
+            <span>CLINICAL TELEMETRY TRENDS</span>
+            <span id="log-count-badge" class="log-count-badge">0 records logged</span>
+        </div>
+        <div class="toolbar-actions">
+            <button id="btn-export-csv" class="btn-action btn-csv" title="Download historical vitals data as CSV">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export CSV
+            </button>
+            <button id="btn-export-pdf" class="btn-action btn-pdf" title="Generate printable clinical telemetry summary report / Save as PDF">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                Print / PDF Report
+            </button>
+        </div>
+    </div>
+
     <div class="chart-container">
         <canvas id="vitalsChart"></canvas>
     </div>
@@ -286,6 +477,9 @@
     <div class="footer-note">
         Updated every 10 seconds. Resting adult nominal ranges: Heart Rate 60–100 BPM, SpO2 &gt; 95%, Respiration Rate 12–20 BrPM.
     </div>
+
+    <!-- Printable Clinical Report Container (Activated via Print / PDF Report) -->
+    <div id="printable-report"></div>
 
     <script src="app.js"></script>
 </body>
