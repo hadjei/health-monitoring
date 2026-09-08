@@ -30,19 +30,25 @@ A real-time, clinical-inspired biomedical patient monitoring system using an **E
 | **SCL** | **GPIO 22** | I2C Serial Clock |
 | **INT** | *Not connected* | Interrupt (optional) |
 
+### Circuit Wiring Schematic
+
+![ESP32 to MAX30102 Circuit Wiring Diagram](docs/circuit_diagram.svg)
+
 ---
 
 ## Project Structure
 
 ```text
 iot-patient-monitor/
+├── docs/
+│   └── circuit_diagram.svg  # Vector circuit schematic diagram
 ├── dashboard/
-│   ├── index.html      # Responsive web dashboard UI
-│   └── app.js          # Firebase listener & Chart.js real-time plot
+│   ├── index.html           # Responsive web dashboard UI
+│   └── app.js               # Firebase listener & Chart.js real-time plot
 ├── firmware/
-│   ├── platformio.ini  # PlatformIO environment & dependency configuration
+│   ├── platformio.ini       # PlatformIO environment & dependency configuration
 │   └── src/
-│       └── main.cpp    # Dual-core DSP & Firebase firmware
+│       └── main.cpp         # Dual-core DSP & Firebase firmware
 ├── .gitignore
 └── README.md
 ```

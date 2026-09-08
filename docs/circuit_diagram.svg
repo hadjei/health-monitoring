@@ -1,0 +1,239 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 950 560" width="100%" height="100%" style="background:#ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <defs>
+    <!-- Drop Shadow for Module Cards -->
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="2" dy="4" stdDeviation="4" flood-opacity="0.12" flood-color="#000000"/>
+    </filter>
+    
+    <!-- Wire Glow Filter -->
+    <filter id="wire-glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="1.5" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+
+    <!-- Gradients -->
+    <linearGradient id="esp32-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#24292e"/>
+      <stop offset="100%" stop-color="#1b1f23"/>
+    </linearGradient>
+
+    <linearGradient id="shield-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#bcc5cf"/>
+      <stop offset="100%" stop-color="#959da5"/>
+    </linearGradient>
+
+    <linearGradient id="max-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8c1d1d"/>
+      <stop offset="100%" stop-color="#5c1111"/>
+    </linearGradient>
+
+    <!-- Pin Marker -->
+    <marker id="dot-red" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6">
+      <circle cx="5" cy="5" r="4" fill="#e74c3c" />
+    </marker>
+    <marker id="dot-black" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6">
+      <circle cx="5" cy="5" r="4" fill="#2c3e50" />
+    </marker>
+    <marker id="dot-blue" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6">
+      <circle cx="5" cy="5" r="4" fill="#2980b9" />
+    </marker>
+    <marker id="dot-green" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6">
+      <circle cx="5" cy="5" r="4" fill="#27ae60" />
+    </marker>
+  </defs>
+
+  <!-- Title Header -->
+  <g id="header">
+    <text x="475" y="38" text-anchor="middle" font-size="22" font-weight="700" fill="#1b2430">IoT Remote Patient Monitor — Wiring Schematic</text>
+    <text x="475" y="60" text-anchor="middle" font-size="13" font-weight="400" fill="#64748b">ESP32 Dev Module (NodeMCU-32S) to MAX30102 Pulse Oximeter Sensor (I2C Interface)</text>
+  </g>
+
+  <!-- Legend Box -->
+  <g id="legend" transform="translate(680, 440)">
+    <rect width="230" height="95" rx="8" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5" />
+    <text x="15" y="22" font-size="12" font-weight="700" fill="#334155">Wiring Color Code</text>
+    
+    <line x1="15" y1="38" x2="45" y2="38" stroke="#e74c3c" stroke-width="3.5" stroke-linecap="round" />
+    <text x="55" y="42" font-size="11.5" fill="#475569">3.3V Power Line (VDD)</text>
+    
+    <line x1="15" y1="56" x2="45" y2="56" stroke="#2c3e50" stroke-width="3.5" stroke-linecap="round" />
+    <text x="55" y="60" font-size="11.5" fill="#475569">GND Ground Return</text>
+    
+    <line x1="15" y1="74" x2="45" y2="74" stroke="#2980b9" stroke-width="3.5" stroke-linecap="round" />
+    <text x="55" y="78" font-size="11.5" fill="#475569">SDA (I2C Data - GPIO 21)</text>
+    
+    <line x1="15" y1="92" x2="45" y2="92" stroke="#27ae60" stroke-width="3.5" stroke-linecap="round" />
+    <text x="55" y="96" font-size="11.5" fill="#475569">SCL (I2C Clock - GPIO 22)</text>
+  </g>
+
+  <!-- ====================================================================== -->
+  <!-- WIRING CONNECTIONS (SVG PATHS) -->
+  <!-- ====================================================================== -->
+  <g id="wires">
+    <!-- 3.3V Wire (Red) -->
+    <!-- ESP32 3V3: (265, 410) -> MAX30102 VIN: (680, 160) -->
+    <path d="M 265 410 L 400 410 L 400 160 L 680 160" 
+          fill="none" stroke="#e74c3c" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
+    <rect x="345" y="148" width="45" height="18" rx="4" fill="#fee2e2" stroke="#ef4444" stroke-width="1" />
+    <text x="367" y="161" text-anchor="middle" font-size="10" font-weight="700" fill="#b91c1c">3.3V</text>
+
+    <!-- GND Wire (Black) -->
+    <!-- ESP32 GND: (265, 380) -> MAX30102 GND: (680, 205) -->
+    <path d="M 265 380 L 425 380 L 425 205 L 680 205" 
+          fill="none" stroke="#2c3e50" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
+    <rect x="365" y="193" width="45" height="18" rx="4" fill="#f1f5f9" stroke="#64748b" stroke-width="1" />
+    <text x="387" y="206" text-anchor="middle" font-size="10" font-weight="700" fill="#1e293b">GND</text>
+
+    <!-- SDA Wire (Blue) - GPIO 21 -->
+    <!-- ESP32 GPIO21: (265, 290) -> MAX30102 SDA: (680, 250) -->
+    <path d="M 265 290 L 450 290 L 450 250 L 680 250" 
+          fill="none" stroke="#2980b9" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
+    <rect x="385" y="238" width="45" height="18" rx="4" fill="#e0f2fe" stroke="#0284c7" stroke-width="1" />
+    <text x="407" y="251" text-anchor="middle" font-size="10" font-weight="700" fill="#0369a1">SDA</text>
+
+    <!-- SCL Wire (Green) - GPIO 22 -->
+    <!-- ESP32 GPIO22: (265, 260) -> MAX30102 SCL: (680, 295) -->
+    <path d="M 265 260 L 475 260 L 475 295 L 680 295" 
+          fill="none" stroke="#27ae60" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
+    <rect x="405" y="283" width="45" height="18" rx="4" fill="#dcfce7" stroke="#16a34a" stroke-width="1" />
+    <text x="427" y="296" text-anchor="middle" font-size="10" font-weight="700" fill="#15803d">SCL</text>
+  </g>
+
+  <!-- ====================================================================== -->
+  <!-- ESP32 BOARD COMPONENT -->
+  <!-- ====================================================================== -->
+  <g id="esp32-board" transform="translate(60, 95)" filter="url(#shadow)">
+    <!-- Main PCB Base -->
+    <rect width="210" height="420" rx="14" fill="url(#esp32-grad)" stroke="#3f474f" stroke-width="2" />
+
+    <!-- ESP-WROOM-32 Metal RF Can Shield -->
+    <rect x="35" y="25" width="140" height="135" rx="5" fill="url(#shield-grad)" stroke="#768390" stroke-width="1.5" />
+    <text x="105" y="80" text-anchor="middle" font-size="13" font-weight="700" fill="#24292e" letter-spacing="1">ESP-WROOM-32</text>
+    <text x="105" y="100" text-anchor="middle" font-size="10.5" font-weight="600" fill="#444d56">Wi-Fi &amp; Bluetooth</text>
+    <text x="105" y="125" text-anchor="middle" font-size="9" fill="#57606a">240MHz Dual-Core Xtensa</text>
+    
+    <!-- PCB Antenna Area (Top) -->
+    <path d="M 50 15 L 160 15 M 65 15 L 65 22 M 95 15 L 95 22 M 125 15 L 125 22 M 150 15 L 150 22" 
+          stroke="#e3b341" stroke-width="3" stroke-linecap="round"/>
+
+    <!-- Micro-USB / Type-C Connector (Bottom) -->
+    <rect x="75" y="395" width="60" height="28" rx="4" fill="#cbd5e1" stroke="#64748b" stroke-width="1.5" />
+    <rect x="85" y="405" width="40" height="12" rx="2" fill="#475569" />
+    <text x="105" y="388" text-anchor="middle" font-size="9" font-weight="600" fill="#94a3b8">USB / POWER</text>
+
+    <!-- EN & BOOT Buttons -->
+    <rect x="25" y="355" width="22" height="22" rx="3" fill="#334155" stroke="#64748b" />
+    <circle cx="36" cy="366" r="6" fill="#e2e8f0" />
+    <text x="36" y="390" text-anchor="middle" font-size="8" fill="#94a3b8">EN</text>
+
+    <rect x="163" y="355" width="22" height="22" rx="3" fill="#334155" stroke="#64748b" />
+    <circle cx="174" cy="366" r="6" fill="#e2e8f0" />
+    <text x="174" y="390" text-anchor="middle" font-size="8" fill="#94a3b8">BOOT</text>
+
+    <!-- Power & Status LEDs -->
+    <circle cx="65" cy="366" r="3.5" fill="#ef4444" />
+    <circle cx="145" cy="366" r="3.5" fill="#3b82f6" />
+
+    <!-- ESP32 Pin Headers (Right Side - Used Pins) -->
+    <!-- GPIO 22 (SCL) - Row 6 -->
+    <g transform="translate(195, 165)">
+      <circle cx="10" cy="0" r="4.5" fill="#e2e8f0" stroke="#27ae60" stroke-width="2" />
+      <text x="-5" y="4" text-anchor="end" font-size="11" font-weight="700" fill="#4ade80">GPIO 22 (SCL)</text>
+    </g>
+
+    <!-- GPIO 21 (SDA) - Row 7 -->
+    <g transform="translate(195, 195)">
+      <circle cx="10" cy="0" r="4.5" fill="#e2e8f0" stroke="#2980b9" stroke-width="2" />
+      <text x="-5" y="4" text-anchor="end" font-size="11" font-weight="700" fill="#60a5fa">GPIO 21 (SDA)</text>
+    </g>
+
+    <!-- Dummy Pin rows for visual realism -->
+    <circle cx="205" cy="225" r="3.5" fill="#64748b" />
+    <text x="190" y="228" text-anchor="end" font-size="9" fill="#94a3b8">GPIO 19</text>
+    <circle cx="205" cy="255" r="3.5" fill="#64748b" />
+    <text x="190" y="258" text-anchor="end" font-size="9" fill="#94a3b8">GPIO 18</text>
+
+    <!-- GND - Row 10 -->
+    <g transform="translate(195, 285)">
+      <circle cx="10" cy="0" r="4.5" fill="#e2e8f0" stroke="#2c3e50" stroke-width="2" />
+      <text x="-5" y="4" text-anchor="end" font-size="11" font-weight="700" fill="#cbd5e1">GND</text>
+    </g>
+
+    <!-- 3V3 - Row 11 -->
+    <g transform="translate(195, 315)">
+      <circle cx="10" cy="0" r="4.5" fill="#e2e8f0" stroke="#e74c3c" stroke-width="2" />
+      <text x="-5" y="4" text-anchor="end" font-size="11" font-weight="700" fill="#f87171">3V3 (Power)</text>
+    </g>
+
+    <!-- Board Label -->
+    <text x="105" y="260" text-anchor="middle" font-size="16" font-weight="800" fill="#ffffff" letter-spacing="2">ESP32</text>
+    <text x="105" y="280" text-anchor="middle" font-size="10" font-weight="600" fill="#38bdf8">DEVKIT V1</text>
+  </g>
+
+  <!-- ====================================================================== -->
+  <!-- MAX30102 SENSOR MODULE -->
+  <!-- ====================================================================== -->
+  <g id="max30102-sensor" transform="translate(680, 115)" filter="url(#shadow)">
+    <!-- Red PCB Board -->
+    <rect width="200" height="240" rx="10" fill="url(#max-grad)" stroke="#b91c1c" stroke-width="1.5" />
+    
+    <!-- Mounting Holes -->
+    <circle cx="15" cy="15" r="6" fill="#ffffff" stroke="#991b1b" stroke-width="1" />
+    <circle cx="185" cy="15" r="6" fill="#ffffff" stroke="#991b1b" stroke-width="1" />
+
+    <!-- Optical Sensor IC Package (Center) -->
+    <rect x="65" y="60" width="70" height="90" rx="4" fill="#0f172a" stroke="#334155" stroke-width="1.5" />
+    
+    <!-- Optical Glass Aperture Window -->
+    <rect x="75" y="72" width="50" height="42" rx="3" fill="#1e293b" stroke="#475569" />
+    <circle cx="88" cy="93" r="7" fill="#ef4444" opacity="0.85" />
+    <circle cx="88" cy="93" r="3" fill="#fca5a5" />
+    <circle cx="112" cy="93" r="7" fill="#38bdf8" opacity="0.85" />
+    <circle cx="112" cy="93" r="3" fill="#bae6fd" />
+    <text x="100" y="138" text-anchor="middle" font-size="8" font-weight="700" fill="#94a3b8" letter-spacing="1">MAX30102</text>
+
+    <!-- Finger Placement Symbol -->
+    <text x="100" y="45" text-anchor="middle" font-size="11" font-weight="700" fill="#fecaca">OPTICAL SENSOR</text>
+    <text x="100" y="170" text-anchor="middle" font-size="9" fill="#fca5a5">I2C Addr: 0x57</text>
+
+    <!-- Sensor Pin Headers (Left Edge) -->
+    <!-- VIN (Pin 1) -->
+    <g transform="translate(0, 45)">
+      <circle cx="0" cy="0" r="4.5" fill="#e2e8f0" stroke="#e74c3c" stroke-width="2" />
+      <text x="15" y="4" font-size="11.5" font-weight="700" fill="#ffffff">VIN (3.3V)</text>
+    </g>
+
+    <!-- GND (Pin 2) -->
+    <g transform="translate(0, 90)">
+      <circle cx="0" cy="0" r="4.5" fill="#e2e8f0" stroke="#2c3e50" stroke-width="2" />
+      <text x="15" y="4" font-size="11.5" font-weight="700" fill="#ffffff">GND</text>
+    </g>
+
+    <!-- SDA (Pin 3) -->
+    <g transform="translate(0, 135)">
+      <circle cx="0" cy="0" r="4.5" fill="#e2e8f0" stroke="#2980b9" stroke-width="2" />
+      <text x="15" y="4" font-size="11.5" font-weight="700" fill="#ffffff">SDA</text>
+    </g>
+
+    <!-- SCL (Pin 4) -->
+    <g transform="translate(0, 180)">
+      <circle cx="0" cy="0" r="4.5" fill="#e2e8f0" stroke="#27ae60" stroke-width="2" />
+      <text x="15" y="4" font-size="11.5" font-weight="700" fill="#ffffff">SCL</text>
+    </g>
+
+    <!-- INT (Pin 5 - Unconnected) -->
+    <g transform="translate(0, 215)">
+      <circle cx="0" cy="0" r="3.5" fill="#64748b" />
+      <text x="15" y="4" font-size="10" fill="#fca5a5">INT (NC)</text>
+    </g>
+  </g>
+
+  <!-- Notes & Safety Callout Box -->
+  <g id="notes" transform="translate(60, 440)">
+    <rect width="590" height="95" rx="8" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5" />
+    <text x="18" y="24" font-size="12" font-weight="700" fill="#166534">⚡ Engineering &amp; Electrical Notes:</text>
+    <text x="18" y="44" font-size="11" fill="#14532d">1. Supply Voltage: MAX30102 operates strictly at 3.3V logic and VDD. Do NOT connect to 5V (causes chip damage).</text>
+    <text x="18" y="62" font-size="11" fill="#14532d">2. I2C Pull-Up Resistors: Most MAX30102 breakout boards have onboard 4.7kΩ pull-ups on SDA and SCL.</text>
+    <text x="18" y="80" font-size="11" fill="#14532d">3. Wire Length: Keep I2C jumper wires short (&lt; 15 cm) to avoid capacitive ringing at 400 kHz Fast-Mode.</text>
+  </g>
+</svg>
