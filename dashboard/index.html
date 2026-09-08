@@ -121,6 +121,94 @@
             color: #7f8c8d;
             margin-top: 10px;
         }
+
+        /* Plethysmogram Oscilloscope Card */
+        .pleth-card {
+            background: #0b0f19;
+            border-radius: 12px;
+            padding: 18px 22px;
+            width: 100%;
+            max-width: 900px;
+            box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+            margin-bottom: 25px;
+            box-sizing: border-box;
+            border: 1px solid #1e293b;
+        }
+        .pleth-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .pleth-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #00f5d4;
+            font-size: 0.95rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+        }
+        .pulse-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #00f5d4;
+            display: inline-block;
+            box-shadow: 0 0 8px #00f5d4;
+            opacity: 0.3;
+            transition: opacity 0.15s ease, transform 0.15s ease;
+        }
+        .pulse-dot.pulsing {
+            opacity: 1;
+            transform: scale(1.4);
+            box-shadow: 0 0 12px #00f5d4;
+        }
+        .pleth-meta {
+            display: flex;
+            gap: 8px;
+        }
+        .pleth-badge {
+            background: #1e293b;
+            color: #94a3b8;
+            font-size: 0.75rem;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+        .pleth-badge.speed {
+            color: #38bdf8;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+        }
+        .canvas-wrapper {
+            position: relative;
+            width: 100%;
+            height: 180px;
+            background: #060911;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #162032;
+        }
+        #ppgCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        .flatline-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ef4444;
+            font-size: 0.9rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            background: rgba(15, 23, 42, 0.85);
+            padding: 6px 16px;
+            border-radius: 6px;
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            display: none;
+        }
     </style>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -170,6 +258,24 @@
                 <span class="vital-unit">BrPM</span>
             </div>
             <div id="resp-status" class="status-indicator status-idle">Waiting</div>
+        </div>
+    </div>
+
+    <!-- Live Plethysmogram (PPG Waveform) Card -->
+    <div class="pleth-card">
+        <div class="pleth-header">
+            <div class="pleth-title">
+                <span class="pulse-dot" id="pulse-dot"></span>
+                <span>LIVE PLETHYSMOGRAM (PPG PULSE WAVEFORM)</span>
+            </div>
+            <div class="pleth-meta">
+                <span id="pleth-rate" class="pleth-badge">PULSE: --</span>
+                <span class="pleth-badge speed">50 Hz / 20ms</span>
+            </div>
+        </div>
+        <div class="canvas-wrapper">
+            <canvas id="ppgCanvas" width="900" height="180"></canvas>
+            <div id="flatline-overlay" class="flatline-overlay">NO PULSE / SENSOR IDLE</div>
         </div>
     </div>
 

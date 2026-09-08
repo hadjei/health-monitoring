@@ -24,6 +24,21 @@ const connectionDot = document.getElementById('connection-dot');
 const connectionStatus = document.getElementById('connection-status');
 const fingerBanner = document.getElementById('finger-banner');
 
+// PPG Plethysmogram Oscilloscope Elements
+const ppgCanvas = document.getElementById('ppgCanvas');
+const ppgCtx = ppgCanvas ? ppgCanvas.getContext('2d') : null;
+const pulseDot = document.getElementById('pulse-dot');
+const plethRate = document.getElementById('pleth-rate');
+const flatlineOverlay = document.getElementById('flatline-overlay');
+
+// Plethysmogram Waveform Buffer & Interpolation Queue
+const WAVE_BUFFER_SIZE = 220; // Number of display points across canvas width
+const ppgBuffer = new Array(WAVE_BUFFER_SIZE).fill(0);
+let ppgIncomingQueue = [];
+let isFingerPresent = false;
+let currentDynamicRange = 100.0; // Dynamic AGC for autoscaling waveform height
+let lastBeatPulseTime = 0;
+
 // Chart Setup
 const ctx = document.getElementById('vitalsChart').getContext('2d');
 const maxDataPoints = 30; // Last 30 points
@@ -105,6 +120,7 @@ const vitalsChart = new Chart(ctx, {
 });
 
 function setIdleState(message) {
+    isFingerPresent = false;
     fingerBanner.style.display = "block";
     if (message) fingerBanner.textContent = message;
     connectionDot.className = "dot warning";
@@ -120,6 +136,12 @@ function setIdleState(message) {
     spo2Status.className = "status-indicator status-idle";
     respStatus.textContent = "No Finger";
     respStatus.className = "status-indicator status-idle";
+
+    if (plethRate) plethRate.textContent = "PULSE: --";
+    if (flatlineOverlay) flatlineOverlay.style.display = "block";
+    if (pulseDot) pulseDot.classList.remove("active");
+    ppgIncomingQueue = [];
+    ppgBuffer.fill(0);
 }
 
 function evaluateVitals(bpm, spo2, resp) {
@@ -158,6 +180,145 @@ function evaluateVitals(bpm, spo2, resp) {
     }
 }
 
+// ----------------------------------------------------
+// Clinical Plethysmogram Oscilloscope Render Engine
+// ----------------------------------------------------
+function drawGrid(width, height) {
+    if (!ppgCtx) return;
+    ppgCtx.strokeStyle = "rgba(0, 245, 212, 0.07)";
+    ppgCtx.lineWidth = 1;
+    const step = 25;
+
+    ppgCtx.beginPath();
+    for (let x = 0; x <= width; x += step) {
+        ppgCtx.moveTo(x, 0);
+        ppgCtx.lineTo(x, height);
+    }
+    for (let y = 0; y <= height; y += step) {
+        ppgCtx.moveTo(0, y);
+        ppgCtx.lineTo(width, y);
+    }
+    ppgCtx.stroke();
+
+    // Subtle horizontal baseline
+    ppgCtx.strokeStyle = "rgba(0, 245, 212, 0.18)";
+    ppgCtx.beginPath();
+    ppgCtx.moveTo(0, height / 2);
+    ppgCtx.lineTo(width, height / 2);
+    ppgCtx.stroke();
+}
+
+let lastFrameTime = performance.now();
+let sampleAccumulator = 0;
+
+function renderOscilloscope(currentTime) {
+    requestAnimationFrame(renderOscilloscope);
+
+    if (!ppgCanvas || !ppgCtx) return;
+
+    const width = ppgCanvas.width;
+    const height = ppgCanvas.height;
+    const centerY = height / 2;
+
+    const dt = Math.min((currentTime - lastFrameTime) / 1000, 0.1); // Guard against tab background tab switches
+    lastFrameTime = currentTime;
+
+    // Drain incoming queue at optical sensor sample rate (~40-50 Hz)
+    const SAMPLES_PER_SEC = 45;
+    sampleAccumulator += dt * SAMPLES_PER_SEC;
+
+    while (sampleAccumulator >= 1.0) {
+        sampleAccumulator -= 1.0;
+        let nextSample = 0;
+        if (isFingerPresent && ppgIncomingQueue.length > 0) {
+            nextSample = ppgIncomingQueue.shift();
+        } else if (!isFingerPresent) {
+            nextSample = 0;
+        } else {
+            // Buffer hold with smooth decay if queue is waiting for next packet
+            nextSample = ppgBuffer[ppgBuffer.length - 1] * 0.94;
+        }
+        ppgBuffer.push(nextSample);
+        ppgBuffer.shift();
+
+        // Detect systolic blip on upstroke for pulsing dot
+        if (isFingerPresent && nextSample > currentDynamicRange * 0.40) {
+            const now = performance.now();
+            if (now - lastBeatPulseTime > 320) {
+                lastBeatPulseTime = now;
+                if (pulseDot) {
+                    pulseDot.classList.add("active");
+                    setTimeout(() => pulseDot.classList.remove("active"), 160);
+                }
+            }
+        }
+    }
+
+    // Auto Gain Control (Dynamic Range estimation)
+    let maxAbs = 40;
+    for (let i = 0; i < ppgBuffer.length; i++) {
+        const val = Math.abs(ppgBuffer[i]);
+        if (val > maxAbs) maxAbs = val;
+    }
+    currentDynamicRange = currentDynamicRange * 0.97 + maxAbs * 0.03;
+    const scaleY = currentDynamicRange > 5 ? (height * 0.38) / currentDynamicRange : 1.0;
+
+    // Clear canvas with deep dark medical monitor background
+    ppgCtx.fillStyle = "#090d16";
+    ppgCtx.fillRect(0, 0, width, height);
+
+    // Draw Grid
+    drawGrid(width, height);
+
+    // Render Waveform
+    ppgCtx.beginPath();
+    const dx = width / (ppgBuffer.length - 1);
+
+    for (let i = 0; i < ppgBuffer.length; i++) {
+        // Invert optical sign: MAX30102 AC drops during pulse absorption, so invert to show positive systolic peak
+        const y = centerY - (ppgBuffer[i] * scaleY);
+        const x = i * dx;
+        if (i === 0) {
+            ppgCtx.moveTo(x, y);
+        } else {
+            ppgCtx.lineTo(x, y);
+        }
+    }
+
+    // Glowing stroke
+    ppgCtx.strokeStyle = isFingerPresent ? "#00f5d4" : "rgba(239, 68, 68, 0.6)";
+    ppgCtx.lineWidth = 2.4;
+    ppgCtx.shadowColor = isFingerPresent ? "#00f5d4" : "rgba(239, 68, 68, 0.4)";
+    ppgCtx.shadowBlur = 10;
+    ppgCtx.stroke();
+
+    // Area fill under wave for medical monitor look
+    if (isFingerPresent) {
+        ppgCtx.lineTo(width, height);
+        ppgCtx.lineTo(0, height);
+        ppgCtx.closePath();
+        const gradient = ppgCtx.createLinearGradient(0, centerY - 40, 0, height);
+        gradient.addColorStop(0, "rgba(0, 245, 212, 0.12)");
+        gradient.addColorStop(1, "rgba(0, 245, 212, 0.0)");
+        ppgCtx.fillStyle = gradient;
+        ppgCtx.shadowBlur = 0;
+        ppgCtx.fill();
+    }
+
+    // Leading Sweep Dot
+    const lastY = centerY - (ppgBuffer[ppgBuffer.length - 1] * scaleY);
+    ppgCtx.beginPath();
+    ppgCtx.arc(width - 2, lastY, 4, 0, 2 * Math.PI);
+    ppgCtx.fillStyle = isFingerPresent ? "#ffffff" : "#ef4444";
+    ppgCtx.shadowColor = isFingerPresent ? "#00f5d4" : "#ef4444";
+    ppgCtx.shadowBlur = 12;
+    ppgCtx.fill();
+    ppgCtx.shadowBlur = 0;
+}
+
+// Start Oscilloscope Render Loop immediately
+requestAnimationFrame(renderOscilloscope);
+
 // Listen for live updates from Firebase RTDB
 database.ref('vitals/current').on('value', (snapshot) => {
     const data = snapshot.val();
@@ -167,6 +328,19 @@ database.ref('vitals/current').on('value', (snapshot) => {
     if (data.fingerDetected === false) {
         setIdleState("⚠️ NO FINGER DETECTED — Place your finger lightly and steadily on the MAX30102 sensor.");
         return;
+    }
+
+    // Finger is detected!
+    isFingerPresent = true;
+    if (flatlineOverlay) flatlineOverlay.style.display = "none";
+
+    // Handle PPG Waveform Streaming
+    if (Array.isArray(data.ppgWave) && data.ppgWave.length > 0) {
+        // Prevent queue accumulation if tab was backgrounded
+        if (ppgIncomingQueue.length > 80) {
+            ppgIncomingQueue = ppgIncomingQueue.slice(-40);
+        }
+        ppgIncomingQueue.push(...data.ppgWave);
     }
 
     // Finger is detected, but vitals are stabilizing
@@ -187,6 +361,7 @@ database.ref('vitals/current').on('value', (snapshot) => {
         spo2Status.className = "status-indicator status-idle";
         respStatus.textContent = "Acquiring";
         respStatus.className = "status-indicator status-idle";
+        if (plethRate) plethRate.textContent = "PULSE: ACQUIRING...";
         return;
     }
 
@@ -198,6 +373,7 @@ database.ref('vitals/current').on('value', (snapshot) => {
     bpmVal.textContent = bpm;
     spo2Val.textContent = spo2;
     respVal.textContent = resp;
+    if (plethRate) plethRate.textContent = `PULSE: ${bpm} BPM`;
 
     evaluateVitals(bpm, spo2, resp);
 

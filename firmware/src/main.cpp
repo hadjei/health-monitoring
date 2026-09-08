@@ -76,6 +76,7 @@
 // Buffer Lengths
 #define BEAT_HISTORY_SIZE 8
 #define RESP_BUFFER_SIZE 400     // 8 seconds @ 50 Hz for respiration cycle tracking
+#define PPG_WAVE_SIZE 40         // Real-time PPG plethysmogram waveform stream size
 
 // ============================================================================
 // DATA STRUCTURES
@@ -122,6 +123,7 @@ struct VitalSigns {
     SensorState state;
     SignalQuality quality;
     unsigned long timestamp;
+    float ppgWave[PPG_WAVE_SIZE];
 };
 
 // ============================================================================
@@ -649,6 +651,7 @@ void TaskDSP(void *pvParameters) {
                     currentVitals.spo2 = 0.0f;
                     currentVitals.respiration = 0.0f;
                     currentVitals.timestamp = millis() / 1000;
+                    for (int i = 0; i < PPG_WAVE_SIZE; i++) currentVitals.ppgWave[i] = 0.0f;
                     portEXIT_CRITICAL(&vitalsMutex);
 
                     #if DEBUG_MODE == 1
@@ -693,6 +696,25 @@ void TaskDSP(void *pvParameters) {
 
             // Accumulate cycle data for SpO2
             spo2Engine.updateCycleSample(redAC, irAC, slowDC_Red, slowDC_IR);
+
+            // Buffer sample in PPG plethysmogram ring buffer
+            static float ppgRingBuffer[PPG_WAVE_SIZE] = {0.0f};
+            static int ppgRingIdx = 0;
+            static int ppgSampleCounter = 0;
+
+            ppgRingBuffer[ppgRingIdx++] = irAC;
+            if (ppgRingIdx >= PPG_WAVE_SIZE) ppgRingIdx = 0;
+            ppgSampleCounter++;
+
+            if (ppgSampleCounter >= 5) {
+                ppgSampleCounter = 0;
+                portENTER_CRITICAL(&vitalsMutex);
+                for (int i = 0; i < PPG_WAVE_SIZE; i++) {
+                    int src = (ppgRingIdx + i) % PPG_WAVE_SIZE;
+                    currentVitals.ppgWave[i] = ppgRingBuffer[src];
+                }
+                portEXIT_CRITICAL(&vitalsMutex);
+            }
 
             // Allow 3.5 seconds of settling before processing beats
             if (millis() - filterWarmupStart < 3500) {
@@ -779,9 +801,9 @@ void TaskComms(void *pvParameters) {
 
         unsigned long now = millis();
 
-        // Push immediately on ANY state change (e.g. finger placed or removed), or periodically every 3s
+        // Push immediately on ANY state change (e.g. finger placed or removed), or periodically every 1.2s
         bool stateChanged = (vitalsSnapshot.state != lastPushedState);
-        bool shouldPeriodicPush = (now - lastFirebasePush >= 3000);
+        bool shouldPeriodicPush = (now - lastFirebasePush >= 1200);
 
         if (stateChanged || shouldPeriodicPush) {
             lastFirebasePush = now;
@@ -807,6 +829,13 @@ void TaskComms(void *pvParameters) {
                     json.set("respiration", 0);
                 }
             }
+
+            // Real-time PPG plethysmogram optical waveform stream
+            FirebaseJsonArray waveArray;
+            for (int i = 0; i < PPG_WAVE_SIZE; i++) {
+                waveArray.add((int)round(vitalsSnapshot.ppgWave[i]));
+            }
+            json.set("ppgWave", waveArray);
 
             json.set("timestamp", (unsigned long)(millis() / 1000));
 
